@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<canvas id="attendanceChart"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+
+const ctx = document.getElementById('attendanceChart');
+
+new Chart(ctx, {
+
+    type: 'bar',
+
+    data: {
+        labels: ['AI','DBMS','Maths'],
+        datasets: [{
+            label: 'Attendance %',
+            data: [90,80,70]
+        }]
+    }
+
+});
+
+</script>
+<h2 class="mb-4">📊 Student Dashboard</h2>
+
+<div class="row">
+
+    <div class="col-md-4">
+
+        <div class="card p-4 text-center">
+
+            <h3>85%</h3>
+            <p>Attendance</p>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card p-4 text-center">
+
+            <h3>5</h3>
+            <p>Upcoming Events</p>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card p-4 text-center">
+
+            <h3>3</h3>
+            <p>Pending Tasks</p>
+
+        </div>
+
+    </div>
+
+</div>
+<div class="card p-4 text-center">
+<div class="card p-3 mt-3">
+
+<h3>Attendance</h3>
+
+<table class="table table-dark">
+
+<tr>
+    <th>Subject</th>
+    <th>Attended</th>
+    <th>Total</th>
+    <th>%</th>
+</tr>
+
+{% for a in attendance %}
+
+<tr>
+    <td>{{ a.subject }}</td>
+    <td>{{ a.attended }}</td>
+    <td>{{ a.total }}</td>
+    <td>{{ a.percentage }}</td>
+</tr>
+
+{% endfor %}
+
+</table>
+
+<div class="card p-3 mt-3">
+
+    <h3>Attendance Predictions</h3>
+
+    {% for alert in alerts %}
+
+    <div class="alert alert-warning">
+
+        <h5>{{ alert.subject }} : {{ alert.current }}%</h5>
+
+        <div class="progress mb-2">
+            <div class="progress-bar"
+                 role="progressbar"
+                 style="width: {{ alert.current }}%">
+                {{ alert.current }}%
+            </div>
+        </div>
+
+        {% for p in alert.predictions %}
+            <div>📈 {{ p }}</div>
+        {% endfor %}
+
+    </div>
+
+    {% endfor %}
+
+</div>
+<div class="progress mb-2">
+    <div class="progress-bar"
+         role="progressbar"
+         style="width: {{ alert.current }}%">
+         {{ alert.current }}%
+    </div>
+</div>
+</div>
+    <h3>🌤 28°C</h3>
+
+    <p>Bangalore Weather</p>
+
+</div>
+{% endblock %}

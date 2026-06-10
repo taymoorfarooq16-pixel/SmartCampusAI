@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h2 class="mb-4">🔍 Lost & Found</h2>
+
+<div class="row">
+
+{% for item in items %}
+
+<div class="col-md-4 mb-4">
+
+    <div class="card p-3">
+
+        <img src="{{ item.image.url }}" class="img-fluid rounded mb-3">
+
+        <h4>{{ item.title }}</h4>
+
+        <p>{{ item.description }}</p>
+
+        <p><b>Contact:</b> {{ item.contact }}</p>
+
+    </div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+{% endblock %}
