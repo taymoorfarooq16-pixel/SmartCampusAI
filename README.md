@@ -24,3 +24,4 @@ A Django-based Smart Campus Management System with:
 
 Taymoor Farooq
 B.Tech CSE
+This change was made in feature-demo branch.
