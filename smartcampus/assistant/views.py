@@ -59,10 +59,14 @@ Recent conversation:
 Student question: {user_input}
 """
 
-                result = genai.Client(api_key=api_key).models.generate_content(
-                    model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
-                    contents=prompt,
-                )
+                client = genai.Client(api_key=api_key)
+                try:
+                    result = client.models.generate_content(
+                        model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
+                        contents=prompt,
+                    )
+                finally:
+                    client.close()
                 bot_reply = (result.text or "").strip()
                 if not bot_reply:
                     bot_reply = "I couldn't create an answer. Please try again."
