@@ -60,16 +60,43 @@ Student question: {user_input}
 """
 
                 client = genai.Client(api_key=api_key)
+                configured_model = os.environ.get(
+                    "GEMINI_MODEL", "gemini-3.6-flash"
+                ).strip()
+                candidate_models = list(dict.fromkeys([
+                    configured_model,
+                    "gemini-3.6-flash",
+                    "gemini-3.5-flash",
+                ]))
+                bot_reply = ""
+                last_model_error = None
                 try:
-                    result = client.models.generate_content(
-                        model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
-                        contents=prompt,
-                    )
+                    for model_name in candidate_models:
+                        try:
+                            result = client.models.generate_content(
+                                model=model_name,
+                                contents=prompt,
+                            )
+                            bot_reply = (result.text or "").strip()
+                            if bot_reply:
+                                break
+                            last_model_error = RuntimeError(
+                                "Gemini returned an empty response"
+                            )
+                        except Exception as model_error:
+                            last_model_error = model_error
+                            logger.warning(
+                                "Gemini model %s failed; trying a fallback model",
+                                model_name,
+                                exc_info=True,
+                            )
                 finally:
                     client.close()
-                bot_reply = (result.text or "").strip()
+
                 if not bot_reply:
-                    bot_reply = "I couldn't create an answer. Please try again."
+                    raise RuntimeError(
+                        "No Gemini model returned a response"
+                    ) from last_model_error
             except Exception:
                 logger.exception("SmartCampusAI Gemini request failed")
                 questions = [faq.question for faq in FAQ.objects.all()]
