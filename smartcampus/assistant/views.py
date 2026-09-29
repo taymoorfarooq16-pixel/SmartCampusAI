@@ -3,19 +3,17 @@ import os
 from difflib import get_close_matches
 
 from google import genai
-from .models import Attendance
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
+from django.shortcuts import redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+
+from .models import Attendance, Event, FAQ, LostItem, Timetable
 
 logger = logging.getLogger(__name__)
-from django.contrib.auth.models import User
-from django.contrib.auth import authenticate, login, logout
-from django.shortcuts import redirect
-from django.contrib.auth.decorators import login_required
-from .models import LostItem
-from django.shortcuts import render
 
-# Create your views here.
-from django.shortcuts import render
-from .models import FAQ, Timetable, Event
 
 def chatbot(request):
     chat = request.session.get("chat", [])
@@ -39,8 +37,10 @@ def chatbot(request):
                     ) or "No timetable has been added."),
                     "Events:\n" + ("\n".join(
                         f"{event.title} on {event.date}"
-                        for event in Event.objects.all()[:50]
-                    ) or "No events have been added."),
+                        for event in Event.objects.filter(
+                            date__gte=timezone.localdate()
+                        ).order_by("date")[:50]
+                    ) or "No upcoming events have been added."),
                 ])
                 history = "\n".join(
                     f"Student: {entry.get('user', '')}\nAssistant: {entry.get('bot', '')}"
@@ -61,12 +61,14 @@ Student question: {user_input}
 
                 client = genai.Client(api_key=api_key)
                 configured_model = os.environ.get(
-                    "GEMINI_MODEL", "gemini-3.6-flash"
+                    "GEMINI_MODEL", "gemini-3.5-flash-lite"
                 ).strip()
                 candidate_models = list(dict.fromkeys([
                     configured_model,
+                    "gemini-3.5-flash-lite",
                     "gemini-3.6-flash",
                     "gemini-3.5-flash",
+                    "gemini-3.8-flash",
                 ]))
                 bot_reply = ""
                 last_model_error = None
@@ -107,8 +109,8 @@ Student question: {user_input}
                     bot_reply = FAQ.objects.get(question=match[0]).answer
                 else:
                     bot_reply = (
-                        "The AI assistant is temporarily unavailable. "
-                        "Please try again later."
+                        "The AI service is temporarily unavailable. "
+                        "Please try again in a little while."
                     )
 
             chat.append({"user": user_input, "bot": bot_reply})
@@ -118,110 +120,93 @@ Student question: {user_input}
 
 
 def attendance_prediction(attended, total):
-
-    current = round((attended / total) * 100, 2)
+    current = round((attended / total) * 100, 2) if total > 0 else 0
+    if total <= 0:
+        return current, ["Attend the next class to start tracking attendance."]
 
     predictions = []
-
     a = attended
     t = total
-
     for i in range(1, 6):
-
         a += 1
         t += 1
-
         new_percentage = round((a / t) * 100, 2)
-
-        predictions.append(
-            f"Attend next {i} class(es) → {new_percentage}%"
-        )
+        predictions.append(f"Attend next {i} class(es) → {new_percentage}%")
 
     return current, predictions
 
 
 @login_required
 def dashboard(request):
-
-    attendance = Attendance.objects.filter(
-        student=request.user
-    )
-
+    attendance = list(Attendance.objects.filter(student=request.user))
     alerts = []
-
-    for a in attendance:
-
+    for record in attendance:
         current, predictions = attendance_prediction(
-    a.attended,
-    a.total
-)
-
+            record.attended, record.total
+        )
         if current < 75:
-
             alerts.append({
-    "subject": a.subject,
-    "current": current,
-    "predictions": predictions
-})
+                "subject": record.subject,
+                "current": current,
+                "predictions": predictions,
+            })
 
-    context = {
-        "attendance": attendance,
-        "alerts": alerts
-    }
-
-    return render(
-        request,
-        "dashboard.html",
-        context
+    total_classes = sum(record.total for record in attendance)
+    classes_attended = sum(record.attended for record in attendance)
+    overall_attendance = (
+        round((classes_attended / total_classes) * 100, 2)
+        if total_classes > 0 else 0
     )
+    upcoming_events = Event.objects.filter(
+        date__gte=timezone.localdate()
+    ).count()
+
+    return render(request, "dashboard.html", {
+        "attendance": attendance,
+        "alerts": alerts,
+        "overall_attendance": overall_attendance,
+        "upcoming_event_count": upcoming_events,
+        "attendance_labels": [record.subject for record in attendance],
+        "attendance_values": [record.percentage() for record in attendance],
+    })
+
 
 def lostfound(request):
-
     items = LostItem.objects.all()
+    return render(request, "lostfound.html", {"items": items})
 
-    return render(request, 'lostfound.html', {'items': items})
 
 def events(request):
-    return render(request, 'events.html')
+    upcoming_events = Event.objects.filter(
+        date__gte=timezone.localdate()
+    ).order_by("date")
+    return render(request, "events.html", {"events": upcoming_events})
+
+
 def signup_view(request):
-
-    if request.method == "POST":
-
-        username = request.POST['username']
-        password = request.POST['password']
-
-        user = User.objects.create_user(
-            username=username,
-            password=password
-        )
-
+    form = UserCreationForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        user = form.save()
         login(request, user)
+        return redirect("dashboard")
+    return render(request, "signup.html", {"form": form})
 
-        return redirect('/')
 
-    return render(request, 'signup.html')
 def login_view(request):
-
+    error = None
     if request.method == "POST":
-
-        username = request.POST['username']
-        password = request.POST['password']
-
-        user = authenticate(
-            request,
-            username=username,
-            password=password
-        )
-
+        username = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "")
+        user = authenticate(request, username=username, password=password)
         if user is not None:
-
             login(request, user)
+            return redirect("dashboard")
+        error = "The username or password is incorrect."
 
-            return redirect('/dashboard/')
+    return render(request, "login.html", {"error": error})
 
-    return render(request, 'login.html')
+
+@require_POST
 def logout_view(request):
-
     logout(request)
-
-    return redirect('/')
+    return redirect("chatbot")
