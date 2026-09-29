@@ -1,54 +1,63 @@
-# Smart Campus AI
+# SmartCampusAI
 
-A Django-based Smart Campus Management System with:
+SmartCampusAI is a Django web app for campus information and student tools. Its chat assistant uses Gemini and answers campus questions from records that an administrator adds to the database.
 
-- Student Dashboard
-- Attendance Tracking and percentage predictions
-- Timetable and event listings
-- Lost & Found Portal
-- FAQ Chat Assistant
+## Features
 
-## Technologies Used
+- Student sign-up and login
+- Student dashboard with attendance totals and per-subject chart
+- Attendance alerts and predictions
+- Upcoming campus events
+- Lost and found listings
+- Gemini campus assistant grounded in saved FAQs, timetable entries, and upcoming events
+- FAQ matching fallback when the AI service cannot be reached
 
-- Python
-- Django
-- SQLite for local development and PostgreSQL when hosted
-- HTML
-- CSS
-- Bootstrap
+The project starts with an empty campus database. The assistant will say when information has not been added, rather than invent campus facts.
 
-The current chatbot matches student questions against saved FAQs; it does not call an external AI model yet.
+## Run locally on Windows
 
-## Run locally
-
-Open a terminal in the `smartcampus` folder, then run:
+Open PowerShell in the `smartcampus` folder:
 
 ```powershell
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 py -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Open `.env` in VS Code. Set a private `SECRET_KEY` and add your Gemini API key to `GEMINI_API_KEY`. Leave `DATABASE_URL` empty to use local SQLite. The `.env` file is ignored by Git and must never be committed.
+
+Then run:
+
+```powershell
 py manage.py migrate
+py manage.py createsuperuser
 py manage.py runserver
 ```
 
-Open `http://127.0.0.1:8000` in your browser.
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Use the admin account at `/admin/` to add FAQs, timetable entries, events, attendance records, and lost items. The chatbot needs saved campus information to answer campus-specific questions.
 
 ## Deploy on Render
 
-Connect this GitHub repository as a Python web service and set its **Root Directory** to `smartcampus`.
+The GitHub repository is connected to the Render web service. Its settings should use:
 
-- Build command: `pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate`
-- Start command: `gunicorn smartcampus.wsgi:application`
-- Add `SECRET_KEY` as a generated secret environment variable.
-- Add `DATABASE_URL` with the PostgreSQL connection string you choose for the app.
-- Set `DEBUG` to `false`.
+- **Root Directory:** `smartcampus`
+- **Build Command:** `pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate`
+- **Start Command:** `gunicorn smartcampus.wsgi:application`
 
-The project uses local SQLite when `DATABASE_URL` is empty, which is suitable for local learning. Use PostgreSQL for a hosted app so its accounts and campus records persist across deploys.
+Set these environment variables in the Render service:
 
-The lost-and-found image uploads use local disk storage. Render's free web service does not preserve uploaded files across deploys, so uploaded images need a separate media storage service for long-term use.
+| Variable | Value |
+| --- | --- |
+| `SECRET_KEY` | A unique generated secret |
+| `DEBUG` | `false` |
+| `DATABASE_URL` | Your PostgreSQL connection URL |
+| `GEMINI_API_KEY` | Your Gemini API key |
+| `GEMINI_MODEL` | Optional; defaults to `gemini-3.5-flash-lite` |
 
-## Developed By
+Never put real secrets in this repository. After deployment, create an administrator account through the Render Shell with `python manage.py createsuperuser`, then open `/admin/` on the deployed site and add your campus data.
 
-Taymoor Farooq
-B.Tech CSE
-This change was made in feature-demo branch.
+## Deployment notes
+
+- A free Render instance may sleep when idle, so the first request after a pause can take longer.
+- Files uploaded to the service's local media folder are not durable across redeploys. Use persistent or external media storage if lost-and-found images must be kept.
