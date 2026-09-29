@@ -16,8 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 def chatbot(request):
-    chat = request.session.get("chat", [])
+    if request.method == "POST" and request.POST.get("clear_chat"):
+        request.session.pop("chat", None)
+        return redirect("chatbot")
 
+    chat = request.session.get("chat", [])
     if request.method == "POST":
         user_input = request.POST.get("query", "").strip()
         if user_input:
@@ -132,7 +135,6 @@ def attendance_prediction(attended, total):
         t += 1
         new_percentage = round((a / t) * 100, 2)
         predictions.append(f"Attend next {i} class(es) → {new_percentage}%")
-
     return current, predictions
 
 
@@ -185,6 +187,8 @@ def events(request):
 
 def signup_view(request):
     form = UserCreationForm(request.POST or None)
+    for field in form.fields.values():
+        field.widget.attrs["class"] = "form-control"
     if request.method == "POST" and form.is_valid():
         user = form.save()
         login(request, user)
@@ -202,7 +206,6 @@ def login_view(request):
             login(request, user)
             return redirect("dashboard")
         error = "The username or password is incorrect."
-
     return render(request, "login.html", {"error": error})
 
 
