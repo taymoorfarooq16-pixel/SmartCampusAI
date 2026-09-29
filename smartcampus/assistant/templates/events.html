@@ -1,23 +1,16 @@
 {% extends 'base.html' %}
-
+{% block title %}Campus events · SmartCampusAI{% endblock %}
 {% block content %}
-
-<h2 class="mb-4">📅 Upcoming Events</h2>
-
-<div class="card p-4 mb-3">
-
-    <h4>Hackathon 2026</h4>
-
-    <p>Date: May 5</p>
-
-</div>
-
-<div class="card p-4">
-
-    <h4>AI Workshop</h4>
-
-    <p>Date: May 10</p>
-
-</div>
-
+<h1 class="mb-4">Upcoming campus events</h1>
+{% for event in events %}
+    <article class="card p-4 mb-3">
+        <h2 class="h4">{{ event.title }}</h2>
+        <p class="mb-2"><strong>{{ event.date|date:"F j, Y" }}</strong></p>
+        <p class="mb-0">{{ event.description }}</p>
+    </article>
+{% empty %}
+    <div class="card p-4">
+        <p class="mb-0">There are no upcoming events yet. Please check back later.</p>
+    </div>
+{% endfor %}
 {% endblock %}
