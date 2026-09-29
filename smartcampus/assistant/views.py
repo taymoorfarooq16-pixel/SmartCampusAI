@@ -1,4 +1,11 @@
+import logging
+import os
+from difflib import get_close_matches
+
+from google import genai
 from .models import Attendance
+
+logger = logging.getLogger(__name__)
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import redirect
@@ -11,85 +18,74 @@ from django.shortcuts import render
 from .models import FAQ, Timetable, Event
 
 def chatbot(request):
-    response = ""
+    chat = request.session.get("chat", [])
 
     if request.method == "POST":
-        user_input = request.POST.get('query').lower()
+        user_input = request.POST.get("query", "").strip()
+        if user_input:
+            try:
+                api_key = os.environ.get("GEMINI_API_KEY")
+                if not api_key:
+                    raise RuntimeError("GEMINI_API_KEY is not configured")
 
-        # FAQ matching
-        faqs = FAQ.objects.all()
-        for faq in faqs:
-            if faq.question.lower() in user_input:
-                response = faq.answer
-                break
+                campus_info = "\n".join([
+                    "FAQs:\n" + ("\n".join(
+                        f"Q: {faq.question}\nA: {faq.answer}"
+                        for faq in FAQ.objects.all()[:50]
+                    ) or "No FAQs have been added."),
+                    "Timetable:\n" + ("\n".join(
+                        f"{item.day}: {item.subject} at {item.time}"
+                        for item in Timetable.objects.all()[:50]
+                    ) or "No timetable has been added."),
+                    "Events:\n" + ("\n".join(
+                        f"{event.title} on {event.date}"
+                        for event in Event.objects.all()[:50]
+                    ) or "No events have been added."),
+                ])
+                history = "\n".join(
+                    f"Student: {entry.get('user', '')}\nAssistant: {entry.get('bot', '')}"
+                    for entry in chat[-6:]
+                )
+                prompt = f"""You are SmartCampusAI, a helpful campus assistant.
+Answer clearly and briefly. Use the campus information below for campus facts.
+If the answer is not in that information, say you don't know. Never invent
+campus schedules, policies, dates, or events.
 
-        # Timetable
-        if "timetable" in user_input:
-            data = Timetable.objects.all()
-            response = "\n".join([f"{t.day}: {t.subject} at {t.time}" for t in data])
+{campus_info}
 
-        # Events
-        if "event" in user_input:
-            events = Event.objects.all()
-            response = "\n".join([f"{e.title} on {e.date}" for e in events])
+Recent conversation:
+{history or "No previous messages."}
 
-        if response == "":
-            response = "Sorry, I don't understand."
+Student question: {user_input}
+"""
 
-    return render(request, 'index.html', {'response': response})
-def chatbot(request):
-    if 'chat' not in request.session:
-        request.session['chat'] = []
+                result = genai.Client(api_key=api_key).models.generate_content(
+                    model=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
+                    contents=prompt,
+                )
+                bot_reply = (result.text or "").strip()
+                if not bot_reply:
+                    bot_reply = "I couldn't create an answer. Please try again."
+            except Exception:
+                logger.exception("SmartCampusAI Gemini request failed")
+                questions = [faq.question for faq in FAQ.objects.all()]
+                match = get_close_matches(
+                    user_input.lower(), questions, n=1, cutoff=0.5
+                )
+                if match:
+                    bot_reply = FAQ.objects.get(question=match[0]).answer
+                else:
+                    bot_reply = (
+                        "The AI assistant is temporarily unavailable. "
+                        "Please try again later."
+                    )
 
-    chat = request.session['chat']
+            chat.append({"user": user_input, "bot": bot_reply})
+            request.session["chat"] = chat[-12:]
 
-    if request.method == "POST":
-        user_input = request.POST.get('query').lower()
-        response = "Sorry, I don't understand."
+    return render(request, "index.html", {"chat": chat})
 
-        from .models import FAQ, Timetable, Event
 
-        for faq in FAQ.objects.all():
-            if faq.question.lower() in user_input:
-                response = faq.answer
-
-        if "timetable" in user_input:
-            data = Timetable.objects.all()
-            response = "\n".join([f"{t.day}: {t.subject} at {t.time}" for t in data])
-
-        if "event" in user_input:
-            events = Event.objects.all()
-            response = "\n".join([f"{e.title} on {e.date}" for e in events])
-
-        chat.append({"user": user_input, "bot": response})
-        request.session['chat'] = chat
-
-    return render(request, 'index.html', {"chat": chat})
-from difflib import get_close_matches
-
-def chatbot(request):
-    if 'chat' not in request.session:
-        request.session['chat'] = []
-
-    chat = request.session['chat']
-
-    if request.method == "POST":
-        user_input = request.POST.get('query').lower()
-        response = "Sorry, I don't understand."
-
-        from .models import FAQ
-
-        questions = [faq.question for faq in FAQ.objects.all()]
-        match = get_close_matches(user_input, questions, n=1, cutoff=0.5)
-
-        if match:
-            faq = FAQ.objects.get(question=match[0])
-            response = faq.answer
-
-        chat.append({"user": user_input, "bot": response})
-        request.session['chat'] = chat
-
-    return render(request, 'index.html', {"chat": chat})
 def attendance_prediction(attended, total):
 
     current = round((attended / total) * 100, 2)
