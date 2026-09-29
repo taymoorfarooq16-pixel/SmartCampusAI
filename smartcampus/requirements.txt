@@ -5,3 +5,4 @@ Pillow>=11.3,<13.0
 psycopg[binary]>=3.2,<4.0
 whitenoise>=6.9,<7.0
 google-genai>=2.0.0,<3.0.0
+python-dotenv>=1.2,<2.0
