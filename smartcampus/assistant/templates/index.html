@@ -1,49 +1,40 @@
 {% extends 'base.html' %}
-
+{% block title %}Campus assistant · SmartCampusAI{% endblock %}
 {% block content %}
-
 <div class="text-center mb-4">
-
     <h1>🤖 Smart Campus AI Assistant</h1>
-
-    <p>AI-powered campus help system</p>
-
+    <p>Ask about campus FAQs, timetables, and upcoming events.</p>
 </div>
 
 <div class="card p-4">
-
-    <div id="chat-area">
-
-        {% for msg in chat %}
-
-            <div class="mb-3">
-
-                <b>You:</b>
-                <p>{{ msg.user }}</p>
-
-                <b>Bot:</b>
-                <p>{{ msg.bot }}</p>
-
-            </div>
-
-        {% endfor %}
-
-    </div>
+    {% if chat %}
+        <section id="chat-area" aria-live="polite" aria-label="Conversation">
+            {% for msg in chat %}
+                <article class="mb-3">
+                    <strong>You:</strong>
+                    <p>{{ msg.user }}</p>
+                    <strong>Bot:</strong>
+                    <p>{{ msg.bot }}</p>
+                </article>
+            {% endfor %}
+        </section>
+        <form method="post" class="mb-3">
+            {% csrf_token %}
+            <input type="hidden" name="clear_chat" value="1">
+            <button type="submit" class="btn btn-outline-light btn-sm">Clear conversation</button>
+        </form>
+    {% else %}
+        <p class="text-light">The assistant uses campus information entered by an administrator. If information is missing, it will tell you.</p>
+    {% endif %}
 
     <form method="post">
-
         {% csrf_token %}
-
+        <label class="visually-hidden" for="campus-question">Your question</label>
         <div class="input-group">
-
-            <input type="text" name="query" class="form-control" placeholder="Ask something..." required>
-
-            <button class="btn btn-custom">Send</button>
-
+            <input id="campus-question" type="text" name="query" class="form-control"
+                   placeholder="Ask something..." maxlength="2000" required>
+            <button type="submit" class="btn btn-custom">Send</button>
         </div>
-
     </form>
-
 </div>
-
 {% endblock %}
